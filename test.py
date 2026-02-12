@@ -18,7 +18,6 @@ async def main():
     print(f"Client ID: {id(client)} (用于验证单例)")
     print("输入 'q' 或 'exit' 退出。\n")
 
-    # 聊天历史 (Context)
     history = [
         Message(role=Role.SYSTEM, content="你是一个乐于助人的 AI 助手，请用简练的中文回答。")
     ]
