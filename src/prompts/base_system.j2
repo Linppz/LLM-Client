@@ -1,3 +1,15 @@
-你是一个{%block role%}默认角色{%endblock%}
-你的任务是{%block task%}默认任务{%endblock%}
-你需要遵守{%block constraints%}默认遵守{%endblock%}
+你是一个{{role}}
+{%if constraints%}
+    {%for c in constraints%}
+    -{{c}}
+    {% endfor %}
+{%endif%}
+
+{%if examples%}
+    {%for ex in examples%}
+    -{{ex.input}}
+    -{{ex.output}}
+    {%endfor%}
+{%endif%}
+{%block task_specific %}
+{% endblock %}

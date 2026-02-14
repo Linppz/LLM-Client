@@ -9,6 +9,10 @@ class PromptTemplate():
         self.env = Environment(loader = FileSystemLoader(template_dir))
 
     def render(self, prompts: dict, user_template: str) -> RenderResult:
+        check = self.show_missing_context(user_template)
+        if check - prompts.keys():
+            raise ValueError("need more variable")
+
         template = self.env.get_template(user_template)
         text = template.render(**prompts)
         tracker = TokenTracker(self.model)
@@ -24,7 +28,7 @@ class PromptTemplate():
     def show_templates(self) -> List:
         return self.env.list_templates()
     
-    #看看一共有多少模板可以用
+    #扫描某些模板需要哪些变量
     def show_missing_context(self, user_template: str) -> set:
         orig_code = self.env.loader.get_source(self.env, user_template)
         table = meta.find_undeclared_variables(self.env.parse(orig_code[0]))
