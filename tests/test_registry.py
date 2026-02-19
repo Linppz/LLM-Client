@@ -4,7 +4,8 @@ import pytest
 
 def test_render_and_log():
     test = PromptTemplate("gpt-4o-mini","src/prompts")
-    role = {"lanuage" : "c++", "role" : "猪", "your_code" : "cout << I Love you"}
+    role = role = {"lanuage": "c++", "role": "猪", "your_code": "cout << I Love you", "output_schema": "{}"}
+
     record = PromptRegistry(test, "tests/test_manifest.json")
     result = record.render_and_log(role, "code_review.j2")
     assert len(record.audit_logs) == 1
@@ -12,7 +13,8 @@ def test_render_and_log():
 
 def test_version_hash_stability():
     test = PromptTemplate("gpt-4o-mini","src/prompts")
-    role = {"lanuage" : "c++", "role" : "猪", "your_code" : "cout << I Love you"}
+    role = role = {"lanuage": "c++", "role": "猪", "your_code": "cout << I Love you", "output_schema": "{}"}
+
     record = PromptRegistry(test, "tests/test_manifest.json")
     result1 = record.render_and_log(role, "code_review.j2")
     result2 = record.render_and_log(role, "code_review.j2")
@@ -20,7 +22,8 @@ def test_version_hash_stability():
 
 def test_get_version():
     test = PromptTemplate("gpt-4o-mini","src/prompts")
-    role = {"lanuage" : "c++", "role" : "猪", "your_code" : "cout << I Love you"}
+    role = role = {"lanuage": "c++", "role": "猪", "your_code": "cout << I Love you", "output_schema": "{}"}
+
     record = PromptRegistry(test, "tests/test_manifest.json")
     result1 = record.render_and_log(role, "code_review.j2")
     number = record.get("code_review.j2", record.data["code_review.j2"][0].version_hash)
@@ -28,9 +31,12 @@ def test_get_version():
 
 def test_diff_versions():
     test = PromptTemplate("gpt-4o-mini","src/prompts")
-    role = {"lanuage" : "c++", "role" : "猪", "your_code" : "cout << I Love you"}
-    second_role = {"lanuage" : "c++", "role" : "狗", "your_code" : "cout << I Love you"}
+    role = {"lanuage": "c++", "role": "猪", "your_code": "cout << I Love you", "output_schema": "{}"}
+
+    second_role = {"lanuage": "c++", "role": "ji1", "your_code": "cout << I Love you", "output_schema": "{}"}
+
     record = PromptRegistry(test, "tests/test_manifest.json")
     result1 = record.render_and_log(role, "code_review.j2")
     result2 = record.render_and_log(second_role, "code_review.j2")
     assert record.diff("code_review.j2", record.data["code_review.j2"][0].version_hash, record.data["code_review.j2"][1].version_hash) != None
+

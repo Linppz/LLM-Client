@@ -27,3 +27,4 @@ class GenerationConfig(BaseModel):
     temperature: float = Field(default = 0.7, ge = 0.0, le = 2.0)
     max_token: Optional[int] = Field(default = 1000)
     top_p: Optional[float] = 1.0
+    response_format: Optional[Dict[str, Any]] = None

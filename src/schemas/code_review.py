@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Optional
+from typing import Optional, Union
 from pydantic import Field, BaseModel, field_validator
 
 
@@ -29,4 +29,9 @@ class CodeReviewResult(BaseModel):
                 raise ValueError("Critical issues must have a suggested fix.")
         return v
     
+class ErrorResult(BaseModel):
+    error_code: str
+    message: str
+    
+CodeReviewResponse = Union[CodeReviewResult, ErrorResult]
     

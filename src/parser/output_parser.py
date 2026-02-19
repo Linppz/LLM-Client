@@ -1,4 +1,4 @@
-
+from pydantic import TypeAdapter  
 import json
 import re
 from typing import Any
@@ -12,6 +12,9 @@ class OutputParser():
         except json.JSONDecodeError:
             text = self._try_fix_truncated(text)
             text = json.loads(text)
+        if not isinstance(schema, type):
+            adapter = TypeAdapter(schema)
+            return adapter.validate_python(text)
         return schema(**text)
 
     def _clean_markdown(self, text: str) -> str:

@@ -1,0 +1,243 @@
+
+WEEK 3
+Prompt Engineering 工程化与结构化输出
+
+Objective: 构建可用于生产环境的 Prompt 管理与结构化输出系统
+
+难度定位: MIT 计算机本科核心课程级别，工业界生产环境标准
+前置完成: Week 1 (@retry / TokenTracker / 环境配置) + Week 2 (LLMClient / Asyncio / Streaming)
+总工时: ~35 小时 / 7 天
+
+核心技术栈：Pydantic V2 | Jinja2 | Typer | Rich | tiktoken | pytest
+
+1  OKR 框架
+本周的 Objective 是构建一个可用于生产环境的 Prompt 工程化系统，以下四个 KR 构成完整的验收体系。
+
+
+
+2  每日时间线
+
+
+3  每日详细拆解
+Day 1（4-5h）— Jinja2 模板引擎核心
+上午（2.5h）：模板系统设计与实现
+目标产出：prompt_engine/ 模块。搭建项目结构，实现 PromptTemplate 类：
+从 .j2 文件加载模板，支持 {% extends %} 继承
+变量注入前做 Pydantic 校验（模板需要哪些变量，类型是什么）
+渲染后自动计算 token 估算（集成 tiktoken）
+
+下午（2h）：模板设计模式
+实现至少 3 个真实场景模板，关键要求是 few-shot examples 的动态注入：
+resume_review.j2 — 简历评审（有评分标准注入）
+code_review.j2 — 代码审查（语言、风格指南作为变量）
+base_system.j2 — 基础 system prompt，其他模板继承它
+
+示例模板结构（base_system.j2）：
+{# prompts/system/base_system.j2 #}
+You are an expert {{ role }}.
+{% if constraints %}
+Constraints:
+{% for c in constraints %}
+- {{ c }}
+{% endfor %}
+{% endif %}
+{% block task_specific %}{% endblock %}
+
+Day 2（4-5h）— 模板版本管理 + 测试
+上午（2.5h）：PromptRegistry — 版本控制
+这不是玩具功能。生产环境中 prompt 漂移是真实的 bug 来源。
+每个模板渲染时自动计算 content hash（SHA-256）
+维护 prompt_manifest.json，记录每个模板的版本历史
+支持 registry.get(name, version) 精确获取
+支持 registry.diff(name, v1, v2) 对比变更
+实现 PromptAuditLog：每次调用记录 template_name / version_hash / rendered_prompt / variables / timestamp
+
+下午（2h）：单元测试
+模板渲染正确性（变量注入、条件分支、继承）
+缺少必要变量时抛出 MissingVariableError（不是 Jinja2 原生 UndefinedError）
+版本 hash 稳定性（同样输入 → 同样 hash）
+Token 估算精度（与 tiktoken 对比，误差 < 5%）
+
+
+Day 3（5-6h）— 结构化输出：Pydantic V2 深度
+⭐ 本周最硬核的部分。
+上午（3h）：Schema 设计与解析管道
+定义多层嵌套 Pydantic 模型，要求使用 Enum、Field 约束、field_validator：
+class Severity(str, Enum):
+    CRITICAL = "critical"
+    MAJOR = "major"
+    MINOR = "minor"
+
+class CodeIssue(BaseModel):
+    line: int = Field(ge=1)
+    severity: Severity
+    description: str = Field(min_length=10)
+    suggested_fix: str | None = None
+
+class CodeReviewResult(BaseModel):
+    overall_score: int = Field(ge=1, le=10)
+    issues: list[CodeIssue]
+    summary: str = Field(min_length=20)
+
+    @field_validator("issues")
+    @classmethod
+    def critical_issues_need_fix(cls, v):
+        for issue in v:
+            if issue.severity == Severity.CRITICAL \
+               and not issue.suggested_fix:
+                raise ValueError("Critical issue must have fix")
+        return v
+
+实现 OutputParser 类，处理 3 种畸形输出：
+Markdown 包裹：LLM 在 JSON 前后加了 ```json ... ``` → 正则清洗
+JSON 截断：token limit 导致不完整 → 尝试修复或返回 partial result
+前缀垃圾：多个 JSON 对象混在一起 → 提取第一个有效的
+
+下午（2.5h）：重试与 Fallback 集成
+关键设计：重试时不是盲重试，而是把 Pydantic 的 ValidationError 格式化后作为新的 user message 追加，让 LLM 自我修正。这是工业界真正在用的 pattern。
+class StructuredLLMCall:
+    async def call(self, template_name, variables,
+                   output_schema: type[T],
+                   max_retries=3) -> T:
+        # 1. 渲染 prompt（自动注入 JSON schema）
+        # 2. 调用 LLM
+        # 3. 解析输出
+        # 4. ValidationError → 反馈给 LLM 重试
+        ...
+
+Day 4（4-5h）— 结构化输出进阶 + Adversarial 测试
+上午（2.5h）：高级 Pattern
+JSON Schema 自动注入：从 Pydantic 模型自动生成 JSON Schema，注入 system prompt
+Discriminated Unions：处理 LLM 返回不同类型结果（SuccessResult | ErrorResult）
+Provider 适配：根据 OpenAI structured output / JSON mode / 纯 prompt 约束自动选择最优策略
+
+下午（2h）：Adversarial 测试
+写专门测试 LLM 输出鲁棒性的测试套件（至少 5 种畸形输入）：
+MALFORMED_OUTPUTS = [
+    '```json\n{"score": 8}\n```',     # markdown
+    '{"score": 8, "summary": "good"',  # truncated
+    'Here is my review:\n{"score": 8}',  # prefix
+    '{"score": "eight"}',               # type error
+    '{"score": 8}\n{"score": 9}',      # multiple
+]
+
+@pytest.mark.parametrize("raw", MALFORMED_OUTPUTS)
+def test_parser_robustness(raw: str):
+    # 解析成功或抛出明确自定义异常
+    ...
+
+
+Day 5（5-6h）— CLI 构建：Typer + Rich
+上午（3h）：CLI 架构
+用 Typer 构建多子命令 CLI，支持以下命令：
+$ promptctl template list
+$ promptctl template render resume_review \
+    --var role=recruiter --var lang=python
+$ promptctl run code-review --file main.py \
+    --model gpt-4 --stream
+$ promptctl audit show --last 10
+$ promptctl audit diff resume_review v1 v2
+
+每个子命令都是独立模块，用 app.add_typer() 组合
+参数校验用 Annotated + Option/Argument
+全局配置用 ~/.promptctl/config.toml（tomllib 读取）
+
+下午（2.5h）：Rich 集成
+实现 streaming 输出实时渲染：
+from rich.live import Live
+from rich.markdown import Markdown
+
+async def stream_with_rich(client, prompt):
+    content = ""
+    with Live(Markdown(content), refresh_per_second=10) as live:
+        async for chunk in client.stream(prompt):
+            content += chunk
+            live.update(Markdown(content))
+
+结构化输出用 Rich Table + Panel 美化显示
+错误信息用 Console().print_exception() 完整 traceback
+Loading 动画用 rich.progress 或 rich.spinner
+
+Day 6（4-5h）— 端到端集成
+上午（2.5h）：Pipeline 串联
+完整的数据流：
+CLI 输入 → Typer 解析 → PromptRegistry 加载模板
+PromptTemplate 渲染（变量校验 + token 估算）
+LLMClient 异步调用（带 Semaphore 限流）
+OutputParser 解析（带智能重试）
+TokenTracker 记录消耗 → Rich 格式化 → AuditLog 持久化
+
+下午（2h）：Error Handling 加固
+统一异常层级，每种异常都有 user_message 和 debug_info：
+class PromptEngineError(Exception): ...
+class TemplateNotFoundError(PromptEngineError): ...
+class MissingVariableError(PromptEngineError): ...
+class OutputParseError(PromptEngineError): ...
+class LLMResponseError(PromptEngineError): ...
+class TokenBudgetExceededError(PromptEngineError): ...
+
+Day 7（4-5h）— 工程质量收尾
+上午（2.5h）：代码质量
+ruff check . && ruff format . → 零警告
+mypy src/ --strict → 零错误（strict 模式是最难的）
+Integration test：mock LLM 响应，验证完整 pipeline
+
+下午（2h）：文档与反思
+README.md：架构图（Mermaid）、安装步骤、使用示例
+DESIGN.md：记录关键设计决策和 trade-off
+对照 OKR 自评每个 KR 的达成情况
+
+4  项目结构
+week3-prompt-engineering/
+├── pyproject.toml
+├── src/
+│   ├── prompt_engine/
+│   │   ├── __init__.py
+│   │   ├── template.py        # Jinja2 加载与渲染
+│   │   ├── registry.py        # 模板注册 + 版本管理
+│   │   └── validators.py      # 渲染前变量校验
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── code_review.py     # CodeReviewResult
+│   │   └── resume_review.py   # ResumeReviewResult
+│   ├── parser/
+│   │   ├── __init__.py
+│   │   └── output_parser.py   # OutputParser + 清洗
+│   ├── client/                    # 复用 Week 2 LLMClient
+│   ├── cli/
+│   │   ├── __init__.py
+│   │   ├── app.py             # Typer 主入口
+│   │   ├── template_cmd.py    # template 子命令
+│   │   ├── run_cmd.py         # run 子命令
+│   │   └── audit_cmd.py       # audit 子命令
+│   └── core/
+│       ├── exceptions.py      # 统一异常层级
+│       └── structured_call.py # StructuredLLMCall
+├── prompts/
+│   ├── system/
+│   │   ├── base_system.j2
+│   │   ├── resume_review.j2
+│   │   └── code_review.j2
+│   └── user/
+├── tests/
+│   ├── test_template.py
+│   ├── test_parser.py
+│   ├── test_registry.py
+│   └── test_integration.py
+└── prompt_manifest.json
+
+5  完成自检 Checklist
+完成时逐10过，全部打勾才算达标：
+
+
+6  设计哲学
+这个计划的强度对标的是：你做完之后，拿出这个项目能跟面试官聊 30 分钟的设计决策，每个组件都有工程理由，不是“教程说要这么做”。
+
+关键原则：
+每一行代码都要能回答“为什么这么做”而不是“教程说要这么做”
+模板版本管理 → 因为 prompt 漂移是生产环境真实的 bug
+智能重试 → 因为盲重试浪费 token 和时间
+自定义异常 → 因为原生异常对用户不友好
+mypy --strict → 因为类型安全在大型项目中是救命的
+
+Good luck. Build something real.

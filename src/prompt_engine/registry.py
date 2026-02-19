@@ -7,15 +7,21 @@ import json
 
 
 class PromptRegistry():
-    def __init__(self, template_engine: PromptTemplate, manifest_path: str):
+    def __init__(self, template_engine: PromptTemplate, manifest_path: str, audit_log_path:str):
         self.template_engine = template_engine
-        self.audit_logs = []
         self.manifest_path = manifest_path
+        self.audit_log_path = audit_log_path
         try:
             with open(manifest_path, 'r') as f:
                 self.data = json.load(f)
         except Exception as e:
             self.data = {}
+
+        try:
+            with open(audit_log_path, 'r') as f:
+                self.audit_logs = json.load(f)
+        except Exception as e:
+            self.audit_logs = []
 
     def _compute_hash(self, text: str) -> str:
         return hashlib.sha256(text.encode()).hexdigest()
@@ -39,6 +45,7 @@ class PromptRegistry():
             variables = prompts)
         
         self.audit_logs.append(temp_PromptAuditLog)
+        self._save_manifest()
         return result
 
     def get(self, user_template: str, hashcode: str):
@@ -73,6 +80,7 @@ class PromptRegistry():
     
     def _save_manifest(self):
         temp_dict = {}
+        temp_log = []
         for name, value in self.data.items():
             temp_dict[name] = []
             for prompt in value:
@@ -82,8 +90,17 @@ class PromptRegistry():
                 box.append(prompt.rendered_text)
                 box.append(str(prompt.timestamp))
                 temp_dict[name].append(box)
+        for log in self.audit_logs:
+            box = []
+            box.append(log.template_name)
+            box.append(log.version_hash)
+            box.append(log.rendered_prompt)
+            box.append(str(log.timestamp))
+            temp_log.append(box)
         with open(self.manifest_path, 'w') as f:
             json.dump(temp_dict, f)
+        with open(self.audit_log_path, 'w') as f:
+            json.dump(temp_log, f)
         
 
 
