@@ -1,0 +1,8 @@
+[paths]
+template_dir = "src/prompts"
+manifest_path = "src/manifest.json"
+audit_log_path = "src/audit_log.json"
+
+[llm]
+default_provider = "openai"
+default_model = "gpt-4o-mini"

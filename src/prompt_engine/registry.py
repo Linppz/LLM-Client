@@ -22,6 +22,7 @@ class PromptRegistry():
                 self.audit_logs = json.load(f)
         except Exception as e:
             self.audit_logs = []
+        self.audit_logs = [PromptAuditLog(**item) for item in self.audit_logs]
 
     def _compute_hash(self, text: str) -> str:
         return hashlib.sha256(text.encode()).hexdigest()
@@ -80,7 +81,7 @@ class PromptRegistry():
     
     def _save_manifest(self):
         temp_dict = {}
-        temp_log = []
+        temp_log = [log.model_dump(mode = 'json') for log in self.audit_logs]
         for name, value in self.data.items():
             temp_dict[name] = []
             for prompt in value:
@@ -90,13 +91,7 @@ class PromptRegistry():
                 box.append(prompt.rendered_text)
                 box.append(str(prompt.timestamp))
                 temp_dict[name].append(box)
-        for log in self.audit_logs:
-            box = []
-            box.append(log.template_name)
-            box.append(log.version_hash)
-            box.append(log.rendered_prompt)
-            box.append(str(log.timestamp))
-            temp_log.append(box)
+
         with open(self.manifest_path, 'w') as f:
             json.dump(temp_dict, f)
         with open(self.audit_log_path, 'w') as f:
