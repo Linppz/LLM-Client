@@ -56,7 +56,7 @@ class LLMFactory:
         return client
 
     @classmethod
-    async def close_all(cls):
+    async def close_all(cls) -> None:
         """
         关闭所有客户端连接。
         必须在程序退出前调用，防止 ResourceWarning 和连接泄漏。
@@ -73,6 +73,7 @@ class LLMFactory:
                 if hasattr(raw_client, "close"):
                     # 同步或异步方法检测
                     import inspect
+
                     if inspect.iscoroutinefunction(raw_client.close):
                         await raw_client.close()
                     else:

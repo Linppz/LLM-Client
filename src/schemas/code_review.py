@@ -3,7 +3,6 @@ from typing import Optional, Union
 from pydantic import Field, BaseModel, field_validator
 
 
-
 class Severity(str, Enum):
     CRITICAL = "critical"
     MAJOR = "major"
@@ -11,27 +10,29 @@ class Severity(str, Enum):
 
 
 class CodeIssue(BaseModel):
-    line : int = Field(ge = 1)
-    severity : Severity
-    description : str = Field(min_length = 10)
+    line: int = Field(ge=1)
+    severity: Severity
+    description: str = Field(min_length=10)
     suggested_fix: Optional[str] = Field(default=None)
 
 
 class CodeReviewResult(BaseModel):
-    overall_score : int = Field(ge = 1, le = 10)
-    issues : list[CodeIssue]
-    summary : str = Field(min_length=20)
+    overall_score: int = Field(ge=1, le=10)
+    issues: list[CodeIssue]
+    summary: str = Field(min_length=20)
+
     @field_validator("issues")
     @classmethod
-    def validate_issues(cls, v):
+    def validate_issues(cls, v: list[CodeIssue]) -> list[CodeIssue]:
         for issue in v:
             if issue.severity == Severity.CRITICAL and not issue.suggested_fix:
                 raise ValueError("Critical issues must have a suggested fix.")
         return v
-    
+
+
 class ErrorResult(BaseModel):
     error_code: str
     message: str
-    
+
+
 CodeReviewResponse = Union[CodeReviewResult, ErrorResult]
-    

@@ -2,64 +2,74 @@
 from typing import List, AsyncIterator
 from openai import AsyncOpenAI
 from src.core.config import settings
-from src.llm.schemas import Message, GenerationConfig, LLMResponse
+from src.llm.schemas import Message, GenerationConfig, LLMResponse, TokenUsage
 from src.llm.openai_client import OpenAIClient
-from src.core.resilience import api_retry # 如果你需要重写 generate，记得引入这个
+from src.core.resilience import api_retry  # 如果你需要重写 generate，记得引入这个
 from src.llm.tokentracker import TokenTracker
+from openai import AsyncStream
+
 
 class DeepSeekClient(OpenAIClient):
-    def __init__(self):
+    def __init__(self) -> None:
         if not settings.DEEPSEEK_API_KEY:
             raise ValueError("DEEPSEEK_API_KEY is not set.")
-            
+
         self.client = AsyncOpenAI(
             api_key=settings.DEEPSEEK_API_KEY.get_secret_value(),
             base_url="https://api.deepseek.com",
-            timeout=settings.LLM_TIMEOUT
+            timeout=settings.LLM_TIMEOUT,
         )
-        
+
         self.original_model = settings.LLM_DEFAULT_MODEL
-        self.target_model = "deepseek-chat" if "gpt" in self.original_model else self.original_model
-    
+        self.target_model = (
+            "deepseek-chat" if "gpt" in self.original_model else self.original_model
+        )
+
     # generate 和 stream 直接继承父类，无需修改代码
     # 如果你要重写 generate，记得加上 @api_retry
-    
-    @api_retry 
-    async def generate(self, messages: List[Message], config: GenerationConfig) -> LLMResponse:
+
+    @api_retry
+    async def generate(
+        self, messages: List[Message], config: GenerationConfig
+    ) -> LLMResponse:
         response = await self.client.chat.completions.create(
             model=self.target_model,
-            messages=self._format_messages(messages),
+            messages=self._format_messages(messages),  # type: ignore[arg-type]
             temperature=config.temperature,
             max_tokens=config.max_token,
             top_p=config.top_p,
-            stream=False
+            stream=False,
         )
-        
+        assert not isinstance(response, AsyncStream)
         # 复用父类的数据清洗逻辑略显麻烦，这里简单拷贝返回逻辑
         choice = response.choices[0]
-        usage = response.usage
+        usagee = response.usage
+        assert usagee is not None
         return LLMResponse(
             content=choice.message.content or "",
             raw_response=response.model_dump(),
-            usage={ # 简单构造 Dict 传给 Pydantic
-                "prompt_tokens": usage.prompt_tokens,
-                "completion_tokens": usage.completion_tokens,
-                "total_tokens": usage.total_tokens
-            },
+            usage=TokenUsage(  # 简单构造 Dict 传给 Pydantic
+                prompt_tokens=usagee.prompt_tokens,
+                completion_tokens=usagee.completion_tokens,
+                total_tokens=usagee.total_tokens,
+            ),
             model_name=response.model,
-            finish_reason=choice.finish_reason
+            finish_reason=choice.finish_reason,
         )
-    
-    async def stream(self, messages: List[Message], config: GenerationConfig) -> AsyncIterator[str]:
+
+    async def stream(
+        self, messages: List[Message], config: GenerationConfig
+    ) -> AsyncIterator[str]:
         self.tracker = TokenTracker(self.target_model)
         stream = await self.client.chat.completions.create(
             model=self.target_model,
-            messages=self._format_messages(messages),
+            messages=self._format_messages(messages),  # type: ignore[arg-type]
             temperature=config.temperature,
             max_tokens=config.max_token,
             top_p=config.top_p,
-            stream=True
+            stream=True,
         )
+        assert isinstance(stream, AsyncStream)
 
         async for chunk in stream:
             content = chunk.choices[0].delta.content

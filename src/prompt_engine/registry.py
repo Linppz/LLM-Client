@@ -1,66 +1,79 @@
 from src.prompt_engine.template import PromptTemplate
-from typing import List
 from src.prompt_engine.schemas import PromptVersion, RenderResult, PromptAuditLog
+from typing import Any
 import hashlib
 import difflib
 import json
 
 
-class PromptRegistry():
-    def __init__(self, template_engine: PromptTemplate, manifest_path: str, audit_log_path:str):
+class PromptRegistry:
+    def __init__(
+        self, template_engine: PromptTemplate, manifest_path: str, audit_log_path: str
+    ):
         self.template_engine = template_engine
         self.manifest_path = manifest_path
         self.audit_log_path = audit_log_path
         try:
-            with open(manifest_path, 'r') as f:
+            with open(manifest_path, "r") as f:
                 self.data = json.load(f)
-        except Exception as e:
+
+            for name in self.data:
+                self.data[name] = [PromptVersion(**item) for item in self.data[name]]
+
+        except FileNotFoundError:
             self.data = {}
+        except Exception as e:
+            raise e
 
         try:
-            with open(audit_log_path, 'r') as f:
+            with open(audit_log_path, "r") as f:
                 self.audit_logs = json.load(f)
-        except Exception as e:
+        except FileNotFoundError:
             self.audit_logs = []
+        except Exception as e:
+            raise e
         self.audit_logs = [PromptAuditLog(**item) for item in self.audit_logs]
 
     def _compute_hash(self, text: str) -> str:
         return hashlib.sha256(text.encode()).hexdigest()
-    
-    def render_and_log(self, prompts: dict, user_template: str) -> RenderResult:
+
+    def render_and_log(
+        self, prompts: dict[str, Any], user_template: str
+    ) -> RenderResult:
         result = self.template_engine.render(prompts, user_template)
         hashcode = self._compute_hash(result.rendered_text)
-        temp_prompt_version = PromptVersion( 
-            template_name = user_template,
-            version_hash = hashcode,
-            rendered_text = result.rendered_text)
-        
+        temp_prompt_version = PromptVersion(
+            template_name=user_template,
+            version_hash=hashcode,
+            rendered_text=result.rendered_text,
+        )
+
         if user_template not in self.data:
             self.data[user_template] = []
         self.data[user_template].append(temp_prompt_version)
 
         temp_PromptAuditLog = PromptAuditLog(
-            template_name = user_template,
-            version_hash = hashcode,
-            rendered_prompt = result.rendered_text,
-            variables = prompts)
-        
+            template_name=user_template,
+            version_hash=hashcode,
+            rendered_prompt=result.rendered_text,
+            variables=prompts,
+        )
+
         self.audit_logs.append(temp_PromptAuditLog)
         self._save_manifest()
         return result
 
-    def get(self, user_template: str, hashcode: str):
+    def get(self, user_template: str, hashcode: str) -> Any | None:
         if user_template not in self.data:
             return None
         else:
             for version in self.data[user_template]:
                 if version.version_hash == hashcode:
                     return version
-        
-        return None
-    
 
-    def diff(self, name: str, v1: str, v2: str):
+        return None
+
+    def diff(self, name: str, v1: str, v2: str) -> list[str] | None:
         if name not in self.data:
             return None
         text1, text2 = "", ""
@@ -71,40 +84,21 @@ class PromptRegistry():
                 text2 = version.rendered_text
         if text1 and text2:
             diff = difflib.unified_diff(
-                text1.splitlines(),
-                text2.splitlines(),
-                lineterm = ""
+                text1.splitlines(), text2.splitlines(), lineterm=""
             )
             result = list(diff)
             return result
         return None
-    
-    def _save_manifest(self):
-        temp_dict = {}
-        temp_log = [log.model_dump(mode = 'json') for log in self.audit_logs]
+
+    def _save_manifest(self) -> None:
+        temp_dict: dict[str, list[dict[str, Any]]] = {}
+        temp_log = [log.model_dump(mode="json") for log in self.audit_logs]
         for name, value in self.data.items():
             temp_dict[name] = []
             for prompt in value:
-                box = []
-                box.append(prompt.template_name)
-                box.append(prompt.version_hash)
-                box.append(prompt.rendered_text)
-                box.append(str(prompt.timestamp))
-                temp_dict[name].append(box)
+                temp_dict[name].append(prompt.model_dump(mode="json"))
 
-        with open(self.manifest_path, 'w') as f:
+        with open(self.manifest_path, "w") as f:
             json.dump(temp_dict, f)
-        with open(self.audit_log_path, 'w') as f:
+        with open(self.audit_log_path, "w") as f:
             json.dump(temp_log, f)
-        
-
-
-
-
-
-            
-
-
-        
-
-

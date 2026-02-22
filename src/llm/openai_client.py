@@ -4,69 +4,77 @@ from openai import AsyncOpenAI
 from src.core.config import settings
 from src.core.resilience import api_retry  # <--- 改这里：导入你写的重试装饰器
 from src.llm.base import BaseLLM
-from src.llm.schemas import Message, GenerationConfig, LLMResponse, TokenUsage, Role
+from src.llm.schemas import Message, GenerationConfig, LLMResponse, TokenUsage
 from src.llm.tokentracker import TokenTracker
+from openai import AsyncStream
+
 
 class OpenAIClient(BaseLLM):
-    def __init__(self):
+    def __init__(self) -> None:
         if not settings.OPENAI_API_KEY:
             raise ValueError("OPENAI_API_KEY is not set.")
-        
+
         self.client = AsyncOpenAI(
             api_key=settings.OPENAI_API_KEY.get_secret_value(),
-            timeout=settings.LLM_TIMEOUT
+            timeout=settings.LLM_TIMEOUT,
         )
-        self.model = settings.LLM_DEFAULT_MODEL if settings.LLM_PROVIDER == "openai" else "gpt-4o-mini"
+        self.model = (
+            settings.LLM_DEFAULT_MODEL
+            if settings.LLM_PROVIDER == "openai"
+            else "gpt-4o-mini"
+        )
 
-        
-
-    def _format_messages(self, messages: List[Message]) -> List[dict]:
-        formatted = []
+    def _format_messages(self, messages: List[Message]) -> List[dict[str, str]]:
+        formatted: list[dict[str, str]] = []
         for msg in messages:
             role = msg.role.value
-            if role == "assistance": # 兼容处理
+            if role == "assistance":  # 兼容处理
                 role = "assistant"
             formatted.append({"role": role, "content": msg.content})
         return formatted
 
-    @api_retry  # <--- 改这里：使用你的装饰器
-    async def generate(self, messages: List[Message], config: GenerationConfig) -> LLMResponse:
+    @api_retry
+    async def generate(
+        self, messages: List[Message], config: GenerationConfig
+    ) -> LLMResponse:
         response = await self.client.chat.completions.create(
-            model= self.model,
-            messages=self._format_messages(messages),
+            model=self.model,
+            messages=self._format_messages(messages),  # type: ignore[arg-type]
             temperature=config.temperature,
             max_tokens=config.max_token,
             top_p=config.top_p,
-            stream=False
+            stream=False,
         )
+        assert not isinstance(response, AsyncStream)
 
         choice = response.choices[0]
         usage = response.usage
-
+        assert usage is not None
         return LLMResponse(
             content=choice.message.content or "",
             raw_response=response.model_dump(),
             usage=TokenUsage(
                 prompt_tokens=usage.prompt_tokens,
                 completion_tokens=usage.completion_tokens,
-                total_tokens=usage.total_tokens
+                total_tokens=usage.total_tokens,
             ),
             model_name=response.model,
-            finish_reason=choice.finish_reason
+            finish_reason=choice.finish_reason,
         )
 
-    # @api_retry  # <--- 改这里
-    async def stream(self, messages: List[Message], config: GenerationConfig) -> AsyncIterator[str]:
+    async def stream(
+        self, messages: List[Message], config: GenerationConfig
+    ) -> AsyncIterator[str]:
         self.tracker = TokenTracker(self.model)
         stream = await self.client.chat.completions.create(
             model=self.model,
-            messages=self._format_messages(messages),
+            messages=self._format_messages(messages),  # type: ignore[arg-type]
             temperature=config.temperature,
             max_tokens=config.max_token,
             top_p=config.top_p,
-            stream=True
+            stream=True,
         )
-
+        assert isinstance(stream, AsyncStream)
         async for chunk in stream:
             content = chunk.choices[0].delta.content
             if content:
