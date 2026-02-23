@@ -6,9 +6,9 @@
 graph TD
     subgraph CLI层
         
-        A[App (Typer)<br/>App/Console] -->|等待用户输入| B[run_cmd<br/>Pipeline]
-        A[App (Typer)<br/>App/Console] -->|等待用户输入| J[audit_cmd]
-        A[App (Typer)<br/>App/Console] -->|等待用户输入| K[template_cmd]
+        A["App (Typer)<br/>App/Console"] -->|等待用户输入| B[run_cmd<br/>Pipeline]
+        A["App (Typer)<br/>App/Console"] -->|等待用户输入| J[audit_cmd]
+        A["App (Typer)<br/>App/Console"] -->|等待用户输入| K[template_cmd]
         I[RICH CONSOLE]
     end
 
@@ -22,7 +22,7 @@ graph TD
     end
 
     subgraph LLM层
-        F[LLMFactory → OpenAI / DeepSeek / Anthropic]
+        F["LLMFactory → OpenAI / DeepSeek / Anthropic"]
     end
 
     subgraph Parser层
