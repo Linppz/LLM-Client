@@ -20,8 +20,7 @@ class AnthropicClient(BaseLLM):
             api_key=settings.ANTHROPIC_API_KEY.get_secret_value(),
             timeout=settings.LLM_TIMEOUT,
         )
-        # self.system_prompt, self.formatted_messages = self._prepare_inputs(messages)
-        # 这里的 model 建议也从 settings 读取，这里简化处理
+
         self.model = "claude-3-5-sonnet-20240620"
 
     def _prepare_inputs(
@@ -37,7 +36,7 @@ class AnthropicClient(BaseLLM):
                 anthropic_messages.append({"role": role, "content": msg.content})
         return system_prompt, anthropic_messages
 
-    @api_retry  # <--- 改这里
+    @api_retry
     async def generate(
         self, messages: List[Message], config: GenerationConfig
     ) -> LLMResponse:
@@ -68,7 +67,7 @@ class AnthropicClient(BaseLLM):
             finish_reason=response.stop_reason,
         )
 
-    @api_retry  # <--- 改这里
+    @api_retry
     async def stream(
         self, messages: List[Message], config: GenerationConfig
     ) -> AsyncIterator[str]:

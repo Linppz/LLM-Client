@@ -101,7 +101,7 @@ def code_review(
                     issue.suggested_fix or "N/A",
                 )
             console.print(Panel(content, title="Code Review Result"))
-            console.print(table)
+            console.print(table) 
             console.print(
                 Panel(
                     f"Totle Tokens Used: {result.token_usage.total_tokens}",

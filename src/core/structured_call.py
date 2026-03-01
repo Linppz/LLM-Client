@@ -67,7 +67,7 @@ class StructuredCall:
                     provider=self.llm_client.__class__.__name__,
                     error_message=str(e),
                 )
-        # 6. 返回解析后的 Pydantic 对象
+
         return (
             self.output_parser.parse(raw_output, output_schema),
             response,

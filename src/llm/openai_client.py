@@ -2,7 +2,7 @@
 from typing import List, AsyncIterator
 from openai import AsyncOpenAI
 from src.core.config import settings
-from src.core.resilience import api_retry  # <--- 改这里：导入你写的重试装饰器
+from src.core.resilience import api_retry
 from src.llm.base import BaseLLM
 from src.llm.schemas import Message, GenerationConfig, LLMResponse, TokenUsage
 from src.llm.tokentracker import TokenTracker

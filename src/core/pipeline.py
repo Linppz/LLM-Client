@@ -30,7 +30,7 @@ class Pipeline:
                 self.llm_client, self.prompt_registry, self.output_parser
             )
             result = await structured_call.call(prompts, user_template, output_schema)
-            # 构建 PipelineResultc参数
+            # 构建 PipelineResult参数
             template_name = {}
             template_name["user_template"] = user_template
             template_name["hash_code"] = self.prompt_registry.data[user_template][

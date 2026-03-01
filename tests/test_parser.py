@@ -1,40 +1,39 @@
-from src.parser.output_parser import OutputParser
 from src.schemas.code_review import CodeReviewResult, ErrorResult, CodeReviewResponse
 import pytest
+from src.core.exceptions import OutputParseError
 
 
-def test_clean_markdown():
-    obj = OutputParser()
+def test_clean_markdown(output_parser):
     text = '```json\n{"overall_score": 8, "issues": [], "summary": "This is a well written code review result"}\n```'
     assert (
-        obj._clean_markdown(text)
+        output_parser._clean_markdown(text)
         == '{"overall_score": 8, "issues": [], "summary": "This is a well written code review result"}'
     )
-    result = obj.parse(text, CodeReviewResult)
+    result = output_parser.parse(text, CodeReviewResult)
     assert result.overall_score == 8
     assert result.issues == []
     assert result.summary == "This is a well written code review result"
 
 
-def test_extract_prefix_garbage():
+def test_extract_prefix_garbage(output_parser):
     text = 'Here is my review:\n{"overall_score": 8, "issues": [], "summary": "This is a well written code review result"}'
-    obj = OutputParser()
-    result = obj.parse(text, CodeReviewResult)
+    result = output_parser.parse(text, CodeReviewResult)
     assert result.overall_score == 8
 
 
-def test_truncated_json():
+def test_truncated_json(output_parser):
     text = '{"overall_score": 8, "issues": [], "summary": "This is a well written code review result"'
-    obj = OutputParser()
-    result = obj.parse(text, CodeReviewResult)
+    result = output_parser.parse(text, CodeReviewResult)
     assert result.overall_score == 8
 
 
-# def test_union_error_result4():
-#     raw_text = "I'm sorry, I cannot help with that."
-#     with pytest.raises(OutputParseError):
-#         result = OutputParser().parse(raw_text, CodeReviewResponse)
+def test_parse_empty_string(output_parser):
+    with pytest.raises(OutputParseError):
+        result = output_parser.parse("", CodeReviewResult)    
 
+def test_parse_completely_invalid(output_parser):
+    with pytest.raises(OutputParseError):
+        result = output_parser.parse("hello world no json here", CodeReviewResult)  
 
 @pytest.mark.parametrize(
     "raw_text, schema, expected_type",
@@ -61,6 +60,6 @@ def test_truncated_json():
         ),
     ],
 )
-def test_union_error_result_param(raw_text, schema, expected_type):
-    result = OutputParser().parse(raw_text, schema)
+def test_union_error_result_param(output_parser, raw_text, schema, expected_type):
+    result = output_parser.parse(raw_text, schema)
     assert isinstance(result, expected_type)

@@ -41,14 +41,13 @@ class DeepSeekClient(OpenAIClient):
             stream=False,
         )
         assert not isinstance(response, AsyncStream)
-        # 复用父类的数据清洗逻辑略显麻烦，这里简单拷贝返回逻辑
         choice = response.choices[0]
         usagee = response.usage
         assert usagee is not None
         return LLMResponse(
             content=choice.message.content or "",
             raw_response=response.model_dump(),
-            usage=TokenUsage(  # 简单构造 Dict 传给 Pydantic
+            usage=TokenUsage(
                 prompt_tokens=usagee.prompt_tokens,
                 completion_tokens=usagee.completion_tokens,
                 total_tokens=usagee.total_tokens,

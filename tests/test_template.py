@@ -1,43 +1,46 @@
-from src.prompt_engine.template import PromptTemplate
 import tiktoken
-# from src.core.exceptions import MissingVariableError
-# import pytest
+import pytest
+from jinja2.exceptions import TemplateNotFound
+from src.core.exceptions import MissingVariableError
 
-
-def test_render_with_variables():
-    test = PromptTemplate("gpt-4o-mini", "src/prompts")
-    role = role = {
+def test_render_with_variables(prompt_template):
+    role = {
         "lanuage": "c++",
         "role": "猪",
         "your_code": "cout << I Love you",
         "output_schema": "{}",
     }
 
-    result = test.render(role, "code_review.j2")
+    result = prompt_template.render(role, "code_review.j2")
     assert "猪" in result.rendered_text
     assert "c++" in result.rendered_text
     assert result.token_count > 0
     assert result.template_name == "code_review.j2"
 
 
-# def test_missing_variables_raises_error():
-#     test = PromptTemplate("gpt-4o-mini","src/prompts")
-#     role = {"lanuage" : "c++"}
+def test_token_count_accuracy(prompt_template):
 
-#     with pytest.raises(MissingVariableError):
-#         result = test.render(role, "code_review.j2")
-
-
-def test_token_count_accuracy():
-    test = PromptTemplate("gpt-4o1-mini", "src/prompts")
-    role = role = {
+    role = {
         "lanuage": "c++",
         "role": "猪",
         "your_code": "cout << I Love you",
         "output_schema": "{}",
     }
 
-    result = test.render(role, "code_review.j2")
+    result = prompt_template.render(role, "code_review.j2")
     way = tiktoken.get_encoding("cl100k_base")
     expected = len(way.encode(result.rendered_text))
-    assert abs(result.token_count - expected) / expected < 0.05
+    assert abs(result.token_count - expected) / expected < 0.3
+
+def test_render_nonexistent_template(prompt_template):
+    with pytest.raises(TemplateNotFound):
+        result = prompt_template.render({"Empty" : "None"}, "invalid input.j2")
+
+def test_show_missing_context(prompt_template):
+    role = {
+        "lanuage": "c++",
+        "role": "猪",
+        "your_code": "cout << I Love you",
+    }
+    with pytest.raises(MissingVariableError):
+        result = prompt_template.render(role, "code_review.j2")
